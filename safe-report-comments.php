@@ -10,10 +10,16 @@ Author: Thorsten Ott, Daniel Bachhuber, Automattic
 Author URI: http://automattic.com
 */
 
+add_action( 'init', 'safe_report_comments_load_textdomain' );
+function safe_report_comments_load_textdomain() {
+	load_plugin_textdomain( 'safe-report-comments', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+
 if ( !class_exists( "Safe_Report_Comments" ) ) {
 
 	class Safe_Report_Comments {
 
+		private $_domain_name = 'safe-report-comments';
 		private $_plugin_prefix = 'srcmnt';
 		private $_admin_notices = array();
 		private $_nonce_key = 'flag_comment_nonce';
@@ -22,11 +28,6 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 		
 		public $plugin_url = false;
 		
-		public $thank_you_message = 'Thank you for your feedback. We will look into it.';
-		public $invalid_nonce_message = 'It seems you already reported this comment. <!-- nonce invalid -->';
-		public $invalid_values_message = 'Cheating huh? <!-- invalid values -->';
-		public $already_flagged_message = 'It seems you already reported this comment. <!-- already flagged -->';
-		public $already_flagged_note = '<!-- already flagged -->'; // displayed instead of the report link when a comment was flagged. 
 		
 		public $filter_vars = array( 'thank_you_message', 'invalid_nonce_message', 'invalid_values_message', 'already_flagged_message', 'already_flagged_note' );
 		
@@ -70,13 +71,13 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 		public function backend_init() {
 			do_action( 'safe_report_comments_backend_init' );
 
-			add_settings_field( $this->_plugin_prefix . '_enabled', __( 'Allow comment flagging' ), array( $this, 'comment_flag_enable' ), 'discussion', 'default' );
+			add_settings_field( $this->_plugin_prefix . '_enabled', __( 'Allow comment flagging', $this->_domain_name ), array( $this, 'comment_flag_enable' ), 'discussion', 'default' );
 			register_setting( 'discussion', $this->_plugin_prefix . '_enabled' );
 
 			if ( ! $this->is_enabled() )
 				return;
 
-			add_settings_field( $this->_plugin_prefix . '_threshold', __( 'Flagging threshold' ), array( $this, 'comment_flag_threshold' ), 'discussion', 'default' );
+			add_settings_field( $this->_plugin_prefix . '_threshold', __( 'Flagging threshold', $this->_domain_name ), array( $this, 'comment_flag_threshold' ), 'discussion', 'default' );
 			register_setting( 'discussion', $this->_plugin_prefix . '_threshold', array( $this, 'check_threshold' ) );
 			add_filter('manage_edit-comments_columns', array( $this, 'add_comment_reported_column' ) );
 			add_action('manage_comments_custom_column', array( $this, 'manage_comment_reported_column' ), 10, 2);
@@ -185,7 +186,7 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 			?>
 			<label for="<?php echo $this->_plugin_prefix; ?>_enabled">
 				<input name="<?php echo $this->_plugin_prefix; ?>_enabled" id="<?php echo $this->_plugin_prefix; ?>_enabled" type="checkbox" value="1" <?php if ( $enabled === true ) echo ' checked="checked"'; ?> />   
-				<?php _e( "Allow your visitors to flag a comment as inappropriate." ); ?>
+				<?php _e( "Allow your visitors to flag a comment as inappropriate.", $this->_domain_name ); ?>
 			</label>
 			<?php
 		}
@@ -198,7 +199,7 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 			?>
 			<label for="<?php echo $this->_plugin_prefix; ?>_threshold">
 				<input size="2" name="<?php echo $this->_plugin_prefix; ?>_threshold" id="<?php echo $this->_plugin_prefix; ?>_threshold" type="text" value="<?php echo $threshold; ?>" />   
-				<?php _e( "Amount of user reports needed to send a comment to moderation?" ); ?>
+				<?php _e( "Amount of user reports needed to send a comment to moderation?", $this->_domain_name ); ?>
 			</label>
 			<?php
 		}
@@ -353,7 +354,7 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 		 */
 		private function cond_die( $message ) {
 			if ( isset( $_REQUEST['no_js'] ) && true == (boolean) $_REQUEST['no_js'] )
-				wp_die( __( $message ), "Safe Report Comments Notice", array('response' => 200 ) );
+				wp_die( $message, __( "Safe Report Comments Notice", $this->_domain_name ), array('response' => 200 ) );
 			else
 				die( __( $message ) );
 		}
@@ -363,34 +364,34 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 		 */
 		public function flag_comment() {		
 			if ( (int) $_REQUEST[ 'comment_id' ] != $_REQUEST[ 'comment_id' ] || empty( $_REQUEST[ 'comment_id' ] ) )
-				$this->cond_die( __( $this->invalid_values_message ) );
+				$this->cond_die( _x( 'Cheating huh?', 'invalid values', $this->_domain_name ) );
 			
 			$comment_id = (int) $_REQUEST[ 'comment_id' ];
 			if ( $this->already_flagged( $comment_id ) )
-				$this->cond_die( __( $this->already_flagged_message ) );
+				$this->cond_die( _x( 'It seems you already reported this comment.', 'already flagged', $this->_domain_name ) );
 				
 			$nonce = $_REQUEST[ 'sc_nonce' ];
 			// checking if nonces help
 			if ( ! wp_verify_nonce( $nonce, $this->_plugin_prefix . '_' . $this->_nonce_key ) ) 
-				$this->cond_die( __( $this->invalid_nonce_message ) );
+				$this->cond_die( _x( 'It seems you already reported this comment.', 'nonce invalid', $this->_domain_name ) );
 			else {
 				$this->mark_flagged( $comment_id );
-				$this->cond_die( __( $this->thank_you_message ) );
+				$this->cond_die( __( 'Thank you for your feedback. We will look into it.', $this->_domain_name ) );
 			}
 			
 		}
 		
-		public function print_flagging_link( $comment_id='', $result_id='', $text='Report comment' ) {
-			echo $this->get_flagging_link( $comment_id='', $result_id='', $text='Report comment' );
+		public function print_flagging_link( $comment_id, $result_id ) {
+			echo $this->get_flagging_link( $comment_id, $result_id );
 		}
 		
 		/* 
 		 * Output Link to report a comment
 		 */
-		public function get_flagging_link( $comment_id='', $result_id='', $text='Report comment' ) {
+		public function get_flagging_link( $comment_id='', $result_id='' ) {
 			global $in_comment_loop;
 			if ( empty( $comment_id ) && !$in_comment_loop ) {
-				return __( 'Wrong usage of print_flagging_link().' );
+				return __( 'Wrong usage of print_flagging_link().', $this->_domain_name );
 			}
 			if ( empty( $comment_id ) ) {
 				$comment_id = get_comment_ID();
@@ -398,14 +399,14 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 			else {
 				$comment_id = (int) $comment_id;
 				if ( !get_comment( $comment_id ) ) {
-					return __( 'This comment does not exist.' );
+					return __( 'This comment does not exist.', $this->_domain_name );
 				}
 			}
 			if ( empty( $result_id ) )
 				$result_id = 'safe-comments-result-' . $comment_id;
 				
 			$result_id = apply_filters( 'safe_report_comments_result_id', $result_id );
-			$text = apply_filters( 'safe_report_comments_flagging_link_text', $text );
+			//$text = apply_filters( 'safe_report_comments_flagging_link_text', $text );
 			
 			$nonce = wp_create_nonce( $this->_plugin_prefix . '_' . $this->_nonce_key );
 			$params = array( 
@@ -417,10 +418,10 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 			);
 			
 			if ( $this->already_flagged( $comment_id ) )
-				return __( $this->already_flagged_note );
+				return _x( '', 'already flagged', $this->_domain_name );
 			
 			return apply_filters( 'safe_report_comments_flagging_link', '
-			<span id="' . $result_id . '"><a class="hide-if-no-js" href="javascript:void(0);" onclick="safe_report_comments_flag_comment( \'' . $comment_id . '\', \'' . $nonce . '\', \'' . $result_id . '\');">' . __( $text ) . '</a></span>' );
+			<span id="' . $result_id . '"><a class="hide-if-no-js" href="javascript:void(0);" title="'.__( 'Report comment as inappropriate', $this->_domain_name ) . '" onclick="safe_report_comments_flag_comment( \'' . $comment_id . '\', \'' . $nonce . '\', \'' . $result_id . '\');">' . __( 'Report comment', $this->_domain_name ) . '</a></span>' );
 			
 			
 		}
@@ -442,7 +443,7 @@ if ( !class_exists( "Safe_Report_Comments" ) ) {
 		 * Callback function to add the report counter to comments screen. Remove action manage_edit-comments_columns if not desired
 		 */
 		public function add_comment_reported_column( $comment_columns ) {
-			$comment_columns['comment_reported'] = _x('Reported', 'column name');
+			$comment_columns['comment_reported'] = _x('Reported', 'column name', $this->_domain_name);
 			return $comment_columns;
 		}
 		
